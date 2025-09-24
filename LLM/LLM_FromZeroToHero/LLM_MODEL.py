@@ -23,8 +23,8 @@ torch.manual_seed(TORCH_SEED)
 
 # Stage1:获取数据集
 if not os.path.exists('sales_textbook.txt'):
-    url = 'https://huggingface.co/datasets/goendalf666/sales-textbook_for_convincing_and_selling/resolve/main/sales_textbook.txt?download=true'
-    # url = 'https://huggingface.co/datasets/wzy816/scifi/resolve/main/data.zip?download=true'
+    # url = 'https://huggingface.co/datasets/goendalf666/sales-textbook_for_convincing_and_selling/resolve/main/sales_textbook.txt?download=true'
+    url = 'https://huggingface.co/datasets/wzy816/scifi/resolve/main/data.zip?download=true'
     with open('sales_textbook.txt', 'wb') as f:
         f.write(requests.get(url).content)
 
@@ -32,7 +32,7 @@ with open('sales_textbook.txt', 'r') as f:
     text = f.read()
 
 # Stage2:序列化 Tokenize the text
-encodings = tiktoken.get_encoding("cl100k_base")
+encodings = tiktoken.get_encoding("cl100k_base")  # 切分编码
 tokenized_text = encodings.encode(text)
 tokenized_text = torch.tensor(tokenized_text).long()
 max_token_value = tokenized_text.max().item()
@@ -43,7 +43,7 @@ train_data = tokenized_text[:train_idex]
 valid_data = tokenized_text[train_idex:]
 
 
-# 前馈神经网络的包装类
+# 前馈神经网络的包装类 两层线性层+ReLU+Dropout
 class FeedforwardNetwork(nn.Module):
     def __init__(self):
         super(FeedforwardNetwork, self).__init__()
@@ -69,17 +69,31 @@ class ScaleDotProductAttention(nn.Module):
         self.Wk = nn.Linear(d_model, d_model)
         self.Wv = nn.Linear(d_model, d_model)
 
-        # 应用mask
+        # 掩码mask，防止看到未来
         self.register_buffer('mask', torch.tril(torch.ones(context_length, context_length)))
 
     def forward(self, x):
-        Q = x * self.Wq(x)
-        K = x * self.Wk(x)
-        V = x * self.Wv(x)
+        B, T, C = x.shape
+        Q = self.Wq(x)
+        K = self.Wk(x)
+        V = self.Wv(x)
+        assert T <= self.context_length
+        assert C == self.d_model
+        # Scaled dot product attention: Q @ K^T / sqrt(d_k)
+        weights = (Q @ K.transpose(-2, -1)) * (1.0 / math.sqrt(K.size(-1)))
+        # Apply masked attention
+        weights = weights.masked_fill(self.tril[:T, :T] == 0, float('-inf'))
+        weights = F.softmax(input=weights, dim=-1)
+        weights = self.dropout_layer(weights)
 
-        attention = Q * K.transpose(-2, -1) / math.sqrt(d_model // num_heads)
-        attention = attention.masked_fill(self.mask == 0, float('-inf'))
-        attention = attention * V
+        # Apply dot product attention: weights @ V
+        out = weights @ V
+        return out
+
+        # attention = Q * K.transpose(-2, -1) / math.sqrt(d_model // num_heads)
+        # attention = attention.masked_fill(self.mask == 0, float('-inf'))
+        # attention = attention * V
+        # return attention
 
 
 # 多头注意力机制，设置参数4,4个头循环进行
@@ -88,11 +102,13 @@ class MultiHeadAttention(nn.Module):
         super(MultiHeadAttention, self).__init__()
         self.heads = nn.ModuleList([ScaleDotProductAttention() for _ in range(num_heads)])
         self.projection_layer = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        self.heads = [head(x) for head in self.heads]
-        out = torch.cat(self.heads, dim=-1)
-        out = self.projection_layer(out)
+        # self.heads = [head(x) for head in self.heads]
+        head_outputs = [head(x) for head in self.heads]
+        out = torch.cat(head_outputs, dim=-1)  # 拼接多个头的输出
+        out = self.projection_layer(out)  # 将拼接后的输出映射成原始维度
         out = self.dropout(out)
         return out
 
@@ -100,6 +116,7 @@ class MultiHeadAttention(nn.Module):
 class TransformerBlock(nn.Module):
     def __init__(self):
         super(TransformerBlock, self).__init__()
+        # 进行归一化处理，防止梯度爆炸和梯度消失
         self.layer_norm1 = nn.LayerNorm(d_model)
         self.layer_norm2 = nn.LayerNorm(d_model)
         self.multi_head_attention = MultiHeadAttention()
@@ -107,13 +124,14 @@ class TransformerBlock(nn.Module):
 
     def forward(self, x):
         x = x + self.multi_head_attention(self.layer_norm1(x))
-        x = x + self.multi_head_attention(self.layer_norm2(x))
+        x = x + self.feedforward_network(self.layer_norm2(x))
         return x
 
 
 class Model(nn.Module):
     def __init__(self):
         super(Model, self).__init__()
+        # 创建一个64维度的Token embedding查找表
         self.token_embedding_lookup_table = nn.Embedding(max_token_value, d_model)
         self.transformer_blocks = nn.ModuleList([TransformerBlock() for _ in range(num_layers)])
         self.model_out_linear_layer = nn.Linear(d_model, max_token_value)
@@ -121,21 +139,29 @@ class Model(nn.Module):
     def forward(self, idx, targets=None):
         B, T = idx.shape
         position_encoding_lookup_table = torch.zeros(context_length, d_model, device=device)
-        position = torch.arange(0, context_length, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        position = torch.arange(0, context_length, dtype=torch.float).unsqueeze(
+            1)  # 创建一个[0,1,2,3.....,15]的张量，并且转换为二维[16,1],便于后续计算
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))  # 使得位置编码在不同维度上有不同频率
+        # 所有偶数行采用sin，奇数行采用cos
         position_encoding_lookup_table[:, 0::2] = torch.sin(position * div_term)
         position_encoding_lookup_table[:, 1::2] = torch.cos(position * div_term)
 
         position_embedding = position_encoding_lookup_table[:T, :].to(device)
+        position_embedding = position_embedding.unsqueeze(0)
         x = self.token_embedding_lookup_table(idx) + position_embedding
-        x = self.transformer_blocks(x)
+        for block in self.transformer_blocks:
+            x = block(x)
+        # x = self.transformer_blocks(x)
         logits = self.model_out_linear_layer(x)
 
         if targets is not None:
             B, T, C = logits.shape
-            logits.reshaped = logits.view(B * T, C)
+            logits_reshaped = logits.view(B * T, C)
             targets_reshaped = targets.view(B * T)
-            loss = F.cross_entropy(input=targets_reshaped, target=targets_reshaped)
+            loss = F.cross_entropy(logits_reshaped, targets_reshaped)
+            # logits.reshaped = logits.view(B * T, C)
+            # targets_reshaped = targets.view(B * T)
+            # loss = F.cross_entropy(input=targets_reshaped, target=targets_reshaped)
         else:
             loss = None
         return logits, loss
@@ -163,12 +189,20 @@ def estimate_loss():
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             x_batch, y_batch = get_batch(split)
-            logits, loss = model.get_batch(split)
+            logits, loss = model(x_batch, y_batch)
             losses[k] = loss
         out[split] = losses.mean()
     model.train()
     return out
 
+def generate(self, idx, max_new_tokens):
+    for _ in range(max_new_tokens):
+        logits, _ = self(idx)
+        logits = logits[:, -1, :]  # 取最后一个位置的预测
+        probs = F.softmax(logits, dim=-1)
+        next_token = torch.multinomial(probs, num_samples=1)
+        idx = torch.cat((idx, next_token), dim=1)
+    return idx
 
 # create the optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
