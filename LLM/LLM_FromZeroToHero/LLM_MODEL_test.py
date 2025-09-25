@@ -150,7 +150,7 @@ class TransformerLanguageModel(nn.Module):
         self.num_blocks = num_blocks
         self.dropout = dropout
         self.max_token_value = max_token_value
-        # token embedding
+        # token embedding总词token表
         self.token_embedding_lookup_table = nn.Embedding(num_embeddings=self.max_token_value + 1,
                                                          embedding_dim=self.d_model)
 
@@ -218,7 +218,7 @@ def get_batch(split: str):
     y = torch.stack([data[idx + 1:idx + context_length + 1] for idx in idxs]).to(device)
     return x, y
 
-# Calculate loss
+# 计算损失函数，调用TransformerLanguageModel
 @torch.no_grad()
 def estimate_loss():
     out = {}
