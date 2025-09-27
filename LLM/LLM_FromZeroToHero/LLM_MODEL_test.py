@@ -7,28 +7,48 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 # Hyperparameters
-batch_size = 4  # How many batches per training step
+batch_size = 4  # 训练步长批次
 context_length = 16  # Length of the token chunk each batch
 d_model = 64  # The size of our model token embeddings
 num_blocks = 8  # Number of transformer blocks
 num_heads = 4  # Number of heads in Multi-head attention
 learning_rate = 1e-3  # 0.001
 dropout = 0.1  # Dropout rate 把已经训练好的数据随机丢百分之十出去重新训练，防止过拟合
-max_iters = 5000  # Total of training iterations <- Change this to smaller number for testing
-eval_interval = 50  # How often to evaluate
+max_iters = 5000  #
+eval_interval = 50  # 评估间隔
 eval_iters = 20  # Number of iterations to average for evaluation
 device = 'cuda' if torch.cuda.is_available() else 'cpu'  # Use GPU if it's available.
 TORCH_SEED = 1337
 torch.manual_seed(TORCH_SEED)
 
 # Stage1:获取数据集
-if not os.path.exists('data/sales_textbook.txt'):
+with open('book.txt', 'r', encoding='utf-8') as f:
+    text = f.read()
+if not os.path.exists('sales_textbook.txt'):
     url = 'https://huggingface.co/datasets/goendalf666/sales-textbook_for_convincing_and_selling/raw/main/sales_textbook.txt'
     with open('sales_textbook.txt', 'w') as f:
         f.write(requests.get(url).text)
 
 with open('sales_textbook.txt', 'r', encoding='utf-8') as f:
     text = f.read()
+
+# # 设置输出文件名
+# output_file = "book.txt"
+# target_folder = 'D:\\shy_study\\My_DailyNotes\\LLM\\LLM_FromZeroToHero\\data\\外国短篇'
+#
+# # 打开输出文件准备写入
+# with open(output_file, 'w', encoding='utf-8') as outfile:
+#     # 遍历当前目录下的所有文件
+#     for filename in os.listdir(target_folder):
+#         # 只处理 .txt 文件，排除输出文件本身
+#         if filename.endswith('.txt') and filename != output_file:
+#                 with open(filename, 'r', encoding='utf-8') as infile:
+#                     # # 写入文件名作为分隔（可选）
+#                     # outfile.write(f"\n--- 来自文件：{filename} ---\n")
+#                     # 写入文件内容
+#                     outfile.write(infile.read())
+#                     outfile.write("\n")  # 添加换行分隔
+#
 
 # Stage2:序列化 Tokenize the text
 encoding = tiktoken.get_encoding("cl100k_base")
