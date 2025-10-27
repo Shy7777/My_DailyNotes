@@ -73,7 +73,7 @@ MoCo 将对比学习形式化为字典查找：
 f_k.params = f_q.params
 
 for x in loader:
-    x_q = aug(x)
+    x_q = aug(x)   #数据增强
     x_k = aug(x)
 
     q = f_q(x_q)         # 查询向量
@@ -104,7 +104,7 @@ for x in loader:
 
 ---
 
-## 🧪 三、实验设计与消融分析
+## 三、实验设计与消融分析
 
 ### 3.1 字典大小对性能影响
 
