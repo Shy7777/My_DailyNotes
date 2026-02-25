@@ -27,13 +27,13 @@ DINO 是一种结合知识蒸馏与自监督学习的框架，核心思想是：
 
 ### 2.1 整体架构
 
-| 组件 | 描述 |
-|------|------|
-| 学生网络（Student） | ViT 或 ResNet，接收多尺度视图，参与梯度更新 |
-| 教师网络（Teacher） | 同构网络，参数由学生的 EMA 更新，不参与反向传播 |
-| 多视图机制 | 输入图像生成多尺度裁剪（global + local views） |
-| 投影头（Projection Head） | 三层MLP + 归一化 + 权重归一化FC，输出K维向量 |
-| 输出正则化 | 使用 Centering + Sharpening 避免 collapse |
+| 组件                   | 描述                                    |
+| -------------------- | ------------------------------------- |
+| 学生网络（Student）        | ViT 或 ResNet，接收多尺度视图，参与梯度更新           |
+| 教师网络（Teacher）        | 同构网络，参数由学生的 EMA 更新，不参与反向传播            |
+| 多视图机制                | 输入图像生成多尺度裁剪（global + local views）     |
+| 投影头（Projection Head） | 三层MLP + 归一化 + 权重归一化FC，输出K维向量          |
+| 输出正则化                | 使用 Centering + Sharpening 避免 collapse |
 
 ### 2.2 训练流程（详见 Algorithm 1）
 
