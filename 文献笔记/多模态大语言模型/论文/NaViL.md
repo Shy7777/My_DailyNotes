@@ -1,5 +1,7 @@
 ## Rethinking Scaling Properties of Native Multimodal Large Language Models under Data Constraints  重新思考数据约束下原生多模态大语言模型的规模特性
 
+[[Prompt template]]
+
 简要：主要是探究，在当前多模态预训练的范式下，多模态的缩放特性是怎么样的规律
 
 背景：组合训练的范式，但不明确的缩放特性
