@@ -60,7 +60,32 @@
 
 
 
-我会给你很多tiff图像和对应的mask文件以及h5ad文件，你根据命名相同的为一组，用python写一个要生成四个.npy文件，分别是raw_gene.npy，masks.npy，images.npy和types.npy，其中，images.npy格式为[patch_num,256,256,3]要将整张的tiff文件分割成256✖️256大小的png格式patch，并对patch编号作为patch_num，3表示png格式的维度，这里的参考/home/share/huadjyin/home/wanghaoran/shy/data/code/patch.py的代码，它也是相应的操作，我会给你提供这张tiff对应的mask文件路径，但是masks.npy格式为[patch_num,256,256,6]其中这最后一个维度6，第一维存储的是细胞的id，你帮我对于每张patch给他们按顺序进行id的重新编码，就从0开始，随后中间2，3，4，5维度都设置为0，最后一个维度保存的是对应组织的代码编号，这里让我自己设置值就好，你弄成常数让我设置，然后就是raw_gene.npy文件，raw_gene.npy存储每个patch中的细胞和基因信息，每个patch一个维度，单个维度的格式为
+我会给你很多tiff图像和对应的mask文件以及h5ad文件，你根据命名相同的为一组，用python写一个要生成四个.npy文件，分别是raw_gene.npy，masks.npy，images.npy和types.npy，其中，images.npy格式为[patch_num,256,256,3]要将整张的tiff文件分割成256✖️256大小的png格式patch，如果没办法完美分割，则直接丢掉不进行padding，原图像素应该是2128*2128，是没办法完美分割的，并对patch编号作为patch_num，3表示png格式的维度，这里的参考/home/share/huadjyin/home/wanghaoran/shy/data/code/patch.py的代码，它也是相应的操作，我会给你提供这张tiff对应的mask文件路径，
+
+masks.npy格式改为[patch_num,256,256,12]其中这最后一个维度12，现在第12通道为组织类型，0到11通道分别代表：  
+Neoplastic: 0  
+Inflammatory: 1  
+Connective: 2  
+Dead: 3  
+Epithelial: 4  
+Bcell: 5  
+Tcell: 6  
+NaturalKillercell: 7  
+Myeloid: 8  
+Plasma: 9  
+Mast: 10，后面的数字即为第几个通道。细胞类型在H5AD文件中，用.obs['celltype']读取celltype这个字段，一定要注意细胞的id主键能够对应上该细胞的celltype，给你一个对照表：Cancer_Epi: Cancer_Epi  
+Normal_Epi: Normal_Epi  
+Epithelia: Epithelia  
+B: Bcell  
+Bcell: Bcell  
+T: Tcell  
+T/NK: NaturalKillercell  
+Tcell: Tcell  
+Stromal: Stromal  
+stroma: Stromal  
+Myeloid: Myeloid  
+Plasma: Plasma  
+Mast: Mast。前面的属性是从H5AD中读出来的原始值，把他们换成冒号后面的值后去对应上面那个对照表的通道数，然后在对应的通道数中进行记录，比如这一个细胞类型对应的是2，那就在通道2那里将该值递增+1记录为该位置上细胞的信息，比如记为1，下一个细胞通道如果还为2，那就记为2，下下个通道为2就计为3，最后一个维度保存的是对应组织的代码编号，这里让我自己设置值就好，你弄成常数让我设置，然后就是raw_gene.npy文件，raw_gene.npy存储每个patch中的细胞和基因信息，每个patch一个维度，单个维度的格式为
 {
 	"has_omics":"True",
 	"cell_data":[
